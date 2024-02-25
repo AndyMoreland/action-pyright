@@ -59,7 +59,7 @@ set -x
 # shellcheck disable=SC2086
 npm exec --yes -- "pyright@${INPUT_PYRIGHT_VERSION}" "${PYRIGHT_ARGS[@]}" ${INPUT_PYRIGHT_FLAGS:-} >"$RDTMP/pyright.json" || true
 
-cat pyright.json
+cat "$RDTMP/pyright.json"
 
 python3 "${BASE_PATH}/pyright_to_rdjson/pyright_to_rdjson.py" <"$RDTMP/pyright.json" >"$RDTMP/rdjson.json"
 
