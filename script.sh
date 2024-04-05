@@ -57,26 +57,33 @@ trap cleanup EXIT
 set -x
 
 # shellcheck disable=SC2086
-npm exec --yes -- "pyright@${INPUT_PYRIGHT_VERSION}" "${PYRIGHT_ARGS[@]}" ${INPUT_PYRIGHT_FLAGS:-} >"$RDTMP/pyright.json" || true
+set +e # Temporarily allow failing scripts
+npm exec --yes -- "pyright@${INPUT_PYRIGHT_VERSION}" "${PYRIGHT_ARGS[@]}" ${INPUT_PYRIGHT_FLAGS:-} >"$RDTMP/pyright.json"
+PYRIGHT_EXIT_CODE_RESULT=$?
+set -e # Disallow proceeding after failing commands
 
 cat "$RDTMP/pyright.json"
 
 python3 "${BASE_PATH}/pyright_to_rdjson/pyright_to_rdjson.py" <"$RDTMP/pyright.json" >"$RDTMP/rdjson.json"
 
-set +e
-# shellcheck disable=SC2086
-reviewdog -f=rdjson \
-  -name="${INPUT_TOOL_NAME}" \
-  -reporter="${INPUT_REPORTER:-github-pr-review}" \
-  -filter-mode="${INPUT_FILTER_MODE}" \
-  -fail-on-error="${INPUT_FAIL_ON_ERROR}" \
-  -level="${INPUT_LEVEL}" \
-  ${INPUT_REVIEWDOG_FLAGS} < "$RDTMP/rdjson.json"
+if [ $PYRIGHT_EXIT_CODE_RESULT -ne 0 ]; then
+  # Only run reviewdog if pyright failed.
 
-reviewdog_rc=$?
+  set +e
+  # shellcheck disable=SC2086
+  reviewdog -f=rdjson \
+    -name="${INPUT_TOOL_NAME}" \
+    -reporter="${INPUT_REPORTER:-github-pr-review}" \
+    -filter-mode="${INPUT_FILTER_MODE}" \
+    -fail-on-error="${INPUT_FAIL_ON_ERROR}" \
+    -level="${INPUT_LEVEL}" \
+    ${INPUT_REVIEWDOG_FLAGS} < "$RDTMP/rdjson.json"
 
-set +x
-echo "reviewdog exited with exit status $reviewdog_rc"
-echo '::endgroup::'
+  reviewdog_rc=$?
 
-exit $reviewdog_rc
+  set +x
+  echo "reviewdog exited with exit status $reviewdog_rc"
+  echo '::endgroup::'
+fi
+
+exit $PYRIGHT_EXIT_CODE_RESULT
